@@ -1,6 +1,6 @@
 # Drupal on Railway
 
-Start script behind the [Drupal Railway template](https://railway.com/deploy/drupal-11) (Agaz Self-Host). It runs the **official `drupal` image** with no custom build:
+Start script behind the Drupal Railway template. It runs the **official `drupal` image** with no custom build:
 
 | Service  | Image (pinned) | Volume |
 |----------|----------------|--------|
