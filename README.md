@@ -1,6 +1,6 @@
 # Drupal on Railway
 
-<!-- DEPLOY_BUTTON -->
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/C3UWAd?utm_medium=integration&utm_source=button&utm_campaign=drupal)
 
 Source of the Drupal Railway template. Railway builds the Drupal service from this repository, so when a new version lands on `main`, everyone who deployed the template gets an "update available" notice and can apply it when they choose.
 
