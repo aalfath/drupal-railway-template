@@ -1,5 +1,5 @@
 #!/bin/bash
-# Drupal on Railway: start script for the official drupal:*-apache image.
+# Drupal on Railway: start script, baked into the image by the Dockerfile.
 # Source: https://github.com/aalfath/drupal-railway-template
 set -euo pipefail
 log() { echo "[railway-drupal] $*"; }
@@ -8,7 +8,6 @@ DATA="${DRUPAL_DATA_DIR:-${RAILWAY_VOLUME_MOUNT_PATH:-/data}}"
 APP=/opt/drupal
 WEB="$APP/web"
 SITE="$WEB/sites/default"
-DRUSH_VERSION="${DRUSH_VERSION:-13.8.1}"
 export PORT="${PORT:-80}"
 export DRUPAL_SITE_NAME="${DRUPAL_SITE_NAME:-Drupal}"
 export DRUPAL_ADMIN_USER="${DRUPAL_ADMIN_USER:-admin}"
@@ -31,24 +30,25 @@ ln -sfn "$DATA/themes" "$WEB/themes/custom"
 chown www-data:www-data "$DATA" "$DATA/files" "$DATA/private" "$DATA/config" "$DATA/config/sync" "$DATA/translations"
 find "$DATA/files" "$DATA/private" "$DATA/config" "$DATA/translations" ! -user www-data -exec chown www-data:www-data {} + 2>/dev/null || true
 
-# 2. Drush (and any extra Composer packages) on top of the image's code base.
-#    The Composer cache lives on the volume, so later boots are quick.
+# 2. Drush is part of the image. Extra Composer packages (DRUPAL_COMPOSER_PACKAGES) are added
+#    on top at boot. After the first success, composer.json/lock are kept on the volume and later
+#    boots run an offline `composer install` from them. A new image (new lock) starts over.
 EXTRA="${DRUPAL_COMPOSER_PACKAGES:-}"
-#    After the first success, composer.json/lock are kept on the volume and later boots
-#    run an offline `composer install` from them (no package repository needed).
-KEY=$(printf '%s|%s|%s' "${DRUPAL_VERSION:-}" "$DRUSH_VERSION" "$EXTRA" | md5sum | cut -c1-12)
-LOCKDIR="$COMPOSER_HOME/lock-$KEY"
-cd "$APP"
-if [ -f "$LOCKDIR/composer.lock" ]; then
-  log "restoring Drush $DRUSH_VERSION ${EXTRA:+and $EXTRA }from the cached lock file"
-  cp "$LOCKDIR/composer.json" "$LOCKDIR/composer.lock" "$APP/"
-  composer install --no-progress --no-dev > /tmp/composer.log 2>&1 || { cat /tmp/composer.log; exit 1; }
-else
-  log "composer require drush/drush:$DRUSH_VERSION $EXTRA"
-  composer require --no-progress --update-no-dev -W "drush/drush:$DRUSH_VERSION" $EXTRA \
-    > /tmp/composer.log 2>&1 || { cat /tmp/composer.log; exit 1; }
-  rm -rf "$COMPOSER_HOME"/lock-*; mkdir -p "$LOCKDIR"
-  cp "$APP/composer.json" "$APP/composer.lock" "$LOCKDIR/"
+if [ -n "$EXTRA" ]; then
+  KEY=$(printf '%s|%s' "$(md5sum < "$APP/composer.lock" | cut -c1-12)" "$EXTRA" | md5sum | cut -c1-12)
+  LOCKDIR="$COMPOSER_HOME/lock-$KEY"
+  cd "$APP"
+  if [ -f "$LOCKDIR/composer.lock" ]; then
+    log "restoring $EXTRA from the cached lock file"
+    cp "$LOCKDIR/composer.json" "$LOCKDIR/composer.lock" "$APP/"
+    composer install --no-progress --no-dev > /tmp/composer.log 2>&1 || { cat /tmp/composer.log; exit 1; }
+  else
+    log "composer require $EXTRA"
+    composer require --no-progress --update-no-dev -W $EXTRA \
+      > /tmp/composer.log 2>&1 || { cat /tmp/composer.log; exit 1; }
+    rm -rf "$COMPOSER_HOME"/lock-*; mkdir -p "$LOCKDIR"
+    cp "$APP/composer.json" "$APP/composer.lock" "$LOCKDIR/"
+  fi
 fi
 DRUSH="$APP/vendor/bin/drush"
 
